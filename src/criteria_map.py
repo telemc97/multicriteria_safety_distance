@@ -12,7 +12,7 @@ class criteria_map:
         self.detSumWeight = rospy.get_param('~detections_sum_weight', 0.4)
         self.avgConfWeight = rospy.get_param('~average_confidence_weight', 0.5)
         self.avgSlopeWeight = rospy.get_param('~average_slope_weight', 0.3)
-        self.avgDensity = rospy.get_param('~average_density', 0.5)
+        self.densityWeight = rospy.get_param('~average_density', 0.5)
 
         self.comparRes = rospy.get_param('~comparison_resolution', 100)
 
@@ -22,7 +22,7 @@ class criteria_map:
 
         self.map = np.zeros(shape=(0,0), dtype=criteriadt)
 
-        self.offset = np.zeros(shape=(2), dtype=np.int8)
+        self.origin = np.zeros(shape=(2), dtype=np.int8)
         self.world_coords = np.zeros(shape=(3), dtype=np.float16)
 
         self.listener = tf.TransformListener()
@@ -66,9 +66,9 @@ class criteria_map:
 
             ##add to average conf
             if (self.map[x,y]['det_sum']>1):
-                self.map[x,y]['avg_conf'] = ((self.map[x,y]['det_sum'] - 1) * (self.map[x,y]['avg_conf']) + conf)/(self.map[x,y]['det_sum'])
+                self.map[x,y]['avg_conf'] = ((self.map[x,y]['det_sum'] - 1) * (self.map[x,y]['avg_conf']) + point_with_conf_msg.confidence)/(self.map[x,y]['det_sum'])
             else:
-                self.map[x,y]['avg_conf'] = conf
+                self.map[x,y]['avg_conf'] = point_with_conf_msg.confidence
 
             ##add density
             self.map[x,y]['density'] = self.map[x,y]['det_sum']/self.res
@@ -92,19 +92,19 @@ class criteria_map:
     def point_to_index(self, point):
         """
         Takes the Point and converts it to matrix index. 
-        It also updates the offset if the value is negative 
+        It also updates the origin if the value is negative 
         or extends it if the value is greater than the matrix.
         The function returns the (x,y).
         """
         if (point[0]/self.res*self.multisampleRes<0):
             x = 0
-            self.offset[0] = int(round(point[0]/self.res*self.multisampleRes)<0)
+            self.origin[0] = int(round(point[0]/self.res*self.multisampleRes)<0)
         else:
             x = int(point[0]/self.res*self.multisampleRes)
 
         if (point[1]/self.res*self.multisampleRes<0):
             y = 0
-            self.offset[1] = int(round(point[1]/self.res*self.multisampleRes)<0)
+            self.origin[1] = int(round(point[1]/self.res*self.multisampleRes)<0)
         else:
             y = int(point[1]/self.res*self.multisampleRes)
 
@@ -156,25 +156,28 @@ class criteria_map:
     
 
     def coord_in_map(self, x, y):
+        """
+        Converts a real world coordinate in a coordinate in the criteria matrix
+        """
         if (x<0):
-            map_x = int(round(x/self.res*self.multisampleRes)) + self.offset[0]
+            map_x = int(round(x/self.res*self.multisampleRes)) + self.origin[0]
         else:
             map_x = int(x/self.res*self.multisampleRes)
         if (y<0):
-            map_y = int(round(y/self.res*self.multisampleRes)) + self.offset[1]
+            map_y = int(round(y/self.res*self.multisampleRes)) + self.origin[1]
         else:
             map_y = int(y/self.res*self.multisampleRes)
         return map_x, map_y
 
 
-    def get_multicriterial_coef(self, point):
+    def get_multicriterial_coef(self, occupancy_point):
+        """
+        Point in matrix coords
+        """
+        point = self.coord_in_map(occupancy_point)
         detSum = self.map[point[0],point[1]]['det_sum']
         avgSlope = self.get_average_slope(point[0],point[1])
         avgConf = self.map[point[0],point[1]]['avg_conf']
         density = self.map[point[0],point[1]]['density']
-
-
-if __name__ == "__main__":    
-    rospy.init_node("multicriterial_map", anonymous=True)
-    criteria_map()
-    rospy.spin()
+        decision = detSum*self.detSumWeight + avgSlope*self.avgSlopeWeight + avgConf*self.avgConfWeight + density*self.densityWeight
+        return decision
