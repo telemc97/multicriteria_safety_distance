@@ -9,10 +9,12 @@ class criteria_map:
     def __init__(self):
         self.res = rospy.get_param('~res', 1)
 
-        self.detSumWeight = rospy.get_param('~detections_sum_weight', 0.4)
-        self.avgConfWeight = rospy.get_param('~average_confidence_weight', 0.5)
+        self.detsWeight = rospy.get_param('~detections_weight', 0.4)
         self.avgSlopeWeight = rospy.get_param('~average_slope_weight', 0.3)
         self.densityWeight = rospy.get_param('~average_density', 0.5)
+        
+        self.maxDecisionCoef = 0
+        self.minDecisionCoef = 100000
 
         self.comparRes = rospy.get_param('~comparison_resolution', 100)
 
@@ -75,19 +77,23 @@ class criteria_map:
 
 
     def get_average_slope(self, i,j):
-        sum_set = self.map[i,j]['points'].shape[0]//3
-        det_sum = 0
-        for i in range(sum_set):
-            det_array = self.map[i,j]['points'][(i*3):(i*3)+3, 0:]
-            det = np.linalg.det(det_array)
-            det_sum +=det
-        avg_det = det_sum/sum_set
-        if (sum_set==0) or (det_sum==0):
-            avg_det = -1
-            return avg_det
+        if not (self.map[i,j]['points']==0):
+            sum_set = int(self.map[i,j]['points'].shape[0])/3
+            det_sum = 0
+            for i in range(sum_set):
+                det_array = self.map[i,j]['points'][(i*3):(i*3)+3, 0:]
+                det = np.linalg.det(det_array)
+                det_sum +=det
+            avg_det = det_sum/sum_set
+            if (sum_set==0) or (det_sum==0):
+                avg_det = 0
+                return avg_det
+            else:
+                return avg_det
         else:
+            avg_det = 0
             return avg_det
-        
+
 
     def point_to_index(self, point):
         """
@@ -155,18 +161,18 @@ class criteria_map:
         return x,y,z
     
 
-    def coord_in_map(self, x, y):
+    def coord_in_map(self, point):
         """
         Converts a real world coordinate in a coordinate in the criteria matrix
         """
-        if (x<0):
-            map_x = int(round(x/self.res*self.multisampleRes)) + self.origin[0]
+        if (point[0]<0):
+            map_x = int(round(point[0]/(self.res*self.multisampleRes))) + self.origin[0]
         else:
-            map_x = int(x/self.res*self.multisampleRes)
-        if (y<0):
-            map_y = int(round(y/self.res*self.multisampleRes)) + self.origin[1]
+            map_x = int(point[0]/(self.res*self.multisampleRes))
+        if (point[1]<0):
+            map_y = int(round(point[1]/self.res*self.multisampleRes)) + self.origin[1]
         else:
-            map_y = int(y/self.res*self.multisampleRes)
+            map_y = int(point[1]/(self.res*self.multisampleRes))
         return map_x, map_y
 
 
@@ -179,5 +185,13 @@ class criteria_map:
         avgSlope = self.get_average_slope(point[0],point[1])
         avgConf = self.map[point[0],point[1]]['avg_conf']
         density = self.map[point[0],point[1]]['density']
-        decision = detSum*self.detSumWeight + avgSlope*self.avgSlopeWeight + avgConf*self.avgConfWeight + density*self.densityWeight
-        return decision
+        decisionCoef = self.detsWeight*(detSum*avgConf) + self.avgSlopeWeight*avgSlope + self.densityWeight*density
+        if (decisionCoef>self.maxDecisionCoef):
+            self.maxDecisionCoef = decisionCoef
+        if (decisionCoef<self.minDecisionCoef):
+            self.minDecisionCoef = decisionCoef
+        if ((self.maxDecisionCoef - self.minDecisionCoef) != 0):
+            normalizedValue = (decisionCoef - self.minDecisionCoef)/(self.maxDecisionCoef - self.minDecisionCoef)
+        else:
+            normalizedValue = 0
+        return normalizedValue
