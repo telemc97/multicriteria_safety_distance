@@ -43,7 +43,7 @@ class numpy_occupancyGrid:
         self.gridPub.publish(occupancyGridOutput)
         to_occupancy_grid_end_time = time.time()
         total_exec_time = (to_occupancy_grid_end_time-to_occupancy_grid_start_time)*1000
-        rospy.loginfo(total_exec_time)
+        # rospy.loginfo(total_exec_time)
 
 
     

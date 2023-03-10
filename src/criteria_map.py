@@ -51,7 +51,7 @@ class criteria_map:
         
         self.world_coords[0:] = point_in_world.point.x, point_in_world.point.y, point_in_world.point.z
 
-        rospy.loginfo('%f, %f' %(self.world_coords[0], self.world_coords[1]))
+        # rospy.loginfo('Point coordinates: %f, %f' %(self.world_coords[0], self.world_coords[1]))
         
         x,y = self.point_to_index(self.world_coords)
         newPoint = self.new_point((x,y), self.world_coords)
@@ -61,7 +61,7 @@ class criteria_map:
             if (self.map[x,y]['det_sum']==0):
                 self.map[x,y]['points'] = self.get_cantor_hash(self.world_coords)
             else:    
-                self.map[x,y]['points'] = np.vstack((self.map[x,y]['points'], self.get_cantor_hash(self.world_coords)))
+                self.map[x,y]['points'] = np.hstack((self.map[x,y]['points'], self.get_cantor_hash(self.world_coords)))
 
             ##add to detection sum
             self.map[x,y]['det_sum'] +=1
@@ -76,20 +76,21 @@ class criteria_map:
             self.map[x,y]['density'] = self.map[x,y]['det_sum']/self.res
 
 
-    def get_average_slope(self, i,j):
-        if not (self.map[i,j]['points']==0):
-            sum_set = int(self.map[i,j]['points'].shape[0])/3
+    def get_average_slope(self, x,y):
+        if (self.map[x,y]['det_sum']>3):
+            rospy.loginfo(self.map[x,y]['det_sum'])
+            sum_set = int(self.map[x,y]['points'].shape[0]/3)
+            det_array = np.zeros(shape=(0,3), dtype=np.float16)
             det_sum = 0
             for i in range(sum_set):
-                det_array = self.map[i,j]['points'][(i*3):(i*3)+3, 0:]
+                for j in range(3):
+                    point = self.map[x,y]['points'][i*3+j]
+                    pointxyz = self.get_points_from_cantor(self.map[x,y]['points'][i*3+j])
+                    det_array = np.vstack((det_array,  pointxyz))
                 det = np.linalg.det(det_array)
                 det_sum +=det
             avg_det = det_sum/sum_set
-            if (sum_set==0) or (det_sum==0):
-                avg_det = 0
-                return avg_det
-            else:
-                return avg_det
+            return avg_det
         else:
             avg_det = 0
             return avg_det
@@ -104,15 +105,15 @@ class criteria_map:
         """
         if (point[0]/self.res*self.multisampleRes<0):
             x = 0
-            self.origin[0] = int(round(point[0]/self.res*self.multisampleRes)<0)
+            self.origin[0] = -int(round(point[0]/self.res*self.multisampleRes)<0)
         else:
-            x = int(point[0]/self.res*self.multisampleRes)
+            x = int(point[0]/(self.res*self.multisampleRes))
 
         if (point[1]/self.res*self.multisampleRes<0):
             y = 0
-            self.origin[1] = int(round(point[1]/self.res*self.multisampleRes)<0)
+            self.origin[1] = -int(round(point[1]/self.res*self.multisampleRes)<0)
         else:
-            y = int(point[1]/self.res*self.multisampleRes)
+            y = int(point[1]/(self.res*self.multisampleRes))
 
         if (x>=self.map.shape[0]):
             newWidth = (x+1)
@@ -122,7 +123,9 @@ class criteria_map:
             newHeight = (y+1)
         else:
             newHeight = self.map.shape[1]
-        self.map = np.resize(self.map, (newWidth,newHeight))
+        temp_map = self.map
+        self.map = np.zeros(shape=(newWidth,newHeight), dtype=temp_map.dtype)
+        self.map[:temp_map.shape[0], :temp_map.shape[1]] = temp_map
         return x, y
         
 
@@ -158,40 +161,44 @@ class criteria_map:
         x = x/1000
         y = y/1000
         z = z/1000
-        return x,y,z
+        xyz = np.array([x],[y],[z], dtype=np.float16)
+        return xyz
     
 
     def coord_in_map(self, point):
         """
-        Converts a real world coordinate in a coordinate in the criteria matrix
+        Converts a real world coordinate (pipeline's resolution) in a coordinate in the criteria matrix
         """
-        if (point[0]<0):
-            map_x = int(round(point[0]/(self.res*self.multisampleRes))) + self.origin[0]
+        map_x = int(point[0]/(self.res*self.multisampleRes)) - self.origin[0]
+        map_y = int(point[1]/(self.res*self.multisampleRes)) - self.origin[1]
+        if (map_x>=self.map.shape[0] or map_y>=self.map.shape[1]):
+            rospy.logwarn('Index: %i, %i is not in the matrix' % (map_x, map_y))
+            return -1
         else:
-            map_x = int(point[0]/(self.res*self.multisampleRes))
-        if (point[1]<0):
-            map_y = int(round(point[1]/self.res*self.multisampleRes)) + self.origin[1]
-        else:
-            map_y = int(point[1]/(self.res*self.multisampleRes))
-        return map_x, map_y
+            return map_x, map_y
 
 
     def get_multicriterial_coef(self, occupancy_point):
         """
-        Point in matrix coords
+        Point in real world's coordinates (pipeline's resolution)
         """
         point = self.coord_in_map(occupancy_point)
-        detSum = self.map[point[0],point[1]]['det_sum']
-        avgSlope = self.get_average_slope(point[0],point[1])
-        avgConf = self.map[point[0],point[1]]['avg_conf']
-        density = self.map[point[0],point[1]]['density']
-        decisionCoef = self.detsWeight*(detSum*avgConf) + self.avgSlopeWeight*avgSlope + self.densityWeight*density
-        if (decisionCoef>self.maxDecisionCoef):
-            self.maxDecisionCoef = decisionCoef
-        if (decisionCoef<self.minDecisionCoef):
-            self.minDecisionCoef = decisionCoef
-        if ((self.maxDecisionCoef - self.minDecisionCoef) != 0):
-            normalizedValue = (decisionCoef - self.minDecisionCoef)/(self.maxDecisionCoef - self.minDecisionCoef)
+        if (point!=-1):
+            detSum = self.map[point[0],point[1]]['det_sum']
+            avgSlope = self.get_average_slope(point[0],point[1])
+            avgConf = self.map[point[0],point[1]]['avg_conf']
+            density = self.map[point[0],point[1]]['density']
+            decisionCoef = self.detsWeight*(detSum*avgConf) + self.avgSlopeWeight*avgSlope + self.densityWeight*density
+            # rospy.loginfo('decision coef: %f' % decisionCoef)
+            if (decisionCoef>self.maxDecisionCoef):
+                self.maxDecisionCoef = decisionCoef
+            elif (decisionCoef<self.minDecisionCoef):
+                self.minDecisionCoef = decisionCoef
+            if ((self.maxDecisionCoef-self.minDecisionCoef) != 0):
+                normalizedValue = (decisionCoef-self.minDecisionCoef)/(self.maxDecisionCoef-self.minDecisionCoef)
+            else:
+                normalizedValue = 0
         else:
             normalizedValue = 0
+
         return normalizedValue
