@@ -2,6 +2,7 @@ import numpy as np
 import rospy
 import tf
 import math
+import sys
 
 from geometry_msgs.msg import PointStamped
 
@@ -80,14 +81,13 @@ class criteria_map:
         if (self.map[x,y]['det_sum']>3):
             rospy.loginfo(self.map[x,y]['det_sum'])
             sum_set = int(self.map[x,y]['points'].shape[0]/3)
-            det_array = np.zeros(shape=(0,3), dtype=np.float16)
+            det_array = np.zeros(shape=(3,3), dtype=np.float16)
             det_sum = 0
             for i in range(sum_set):
                 for j in range(3):
-                    point = self.map[x,y]['points'][i*3+j]
                     pointxyz = self.get_points_from_cantor(self.map[x,y]['points'][i*3+j])
-                    det_array = np.vstack((det_array,  pointxyz))
-                det = np.linalg.det(det_array)
+                    det_array[j,:] = pointxyz
+                det = self.det_calc(det_array)
                 det_sum +=det
             avg_det = det_sum/sum_set
             return avg_det
@@ -130,39 +130,53 @@ class criteria_map:
         
 
     def new_point(self, index, point):
-        cantorPoint = int(self.get_cantor_hash(point)/self.comparRes) #downscale the resolution
+        new_point = True
+        cantorPoint = self.get_cantor_hash(point)
         detectedPoints = self.map[index[0], index[1]]['points']
         it = np.nditer(detectedPoints, op_flags=['readonly'])
         for x in it:
-            if (int(x/self.comparRes)==cantorPoint): #downscale the resolution here as well
-                return False
-            else:
-                return True
+            if (int(x/self.comparRes)==cantorPoint): new_point = False
+            rospy.loginfo('Point: %f, %f, %f already detected' % (point[0], point[1], point[2]))
+        return new_point
+
     
 
     def get_cantor_hash(self, point):
-        x = point[0] * 1000
-        y = point[1] * 1000
-        z = point[2] * 1000
-        k = (((x + y)*((x + y)+1))/2)+y
-        cHash = (((k + z)*((k + z)+1))/2)+ z
+        newPoints = np.zeros(shape=(3), dtype=np.int64)
+        for i in range(3):
+            if (point[i]<0):
+                negative=int(1)
+                point[i] = abs(point[i])
+            else:
+                negative=int(0)
+            meters = int(point[i] - point[i]%1)
+            centimeters = int(point[i]%1*100)
+            newPoints[i] = int((negative*100000) + (meters*100) + centimeters)
+        a = int((math.pow(newPoints[0],2) + newPoints[0] + 2*newPoints[0]*newPoints[1] + 3*newPoints[1] + math.pow(newPoints[1],2))/2)
+        cHash = int((math.pow(a,2) + a + 2*a*newPoints[2] + 3*newPoints[2] + math.pow(newPoints[2],2))/2)
         return cHash
 
 
     def get_points_from_cantor(self, cantor):
-        w = int(((math.sqrt((8*cantor)+1))-1)/2)
-        t = (w*(w+1))/2
-        z = cantor-t
-        k = w - z
-        w = int(((math.sqrt((8*k)+1))-1)/2)
-        t = (w*(w+1))/2
-        y = k - t
-        x = w - y
-        x = x/1000
-        y = y/1000
-        z = z/1000
-        xyz = np.array([x],[y],[z], dtype=np.float16)
-        return xyz
+        w = math.floor((math.sqrt(8*cantor+1)-1)/2)
+        t = (math.pow(w,2)+w)/2
+        z = cantor - t
+        xy = w - z
+        xyw = math.floor((math.sqrt(8*xy+1)-1)/2)
+        xyt = (math.pow(xyw,2)+xyw)/2
+        y = xy - xyt
+        x = xyw - y
+        newPoints = np.array([x,y,z], dtype=np.int64)
+        point = np.zeros(shape=(3), dtype=np.float32)
+        for i in range(3):
+            if ((newPoints[i]//100000) == 0):
+                meters = int((newPoints[i]/100)//1)
+                centimeteres = int(meters%100)
+            else:
+                meters = int(((newPoints[i]-100000)/100)//1)
+                centimeteres = int(meters%100)
+            point[i] = meters + centimeteres/100
+        return point
     
 
     def coord_in_map(self, point):
@@ -202,3 +216,11 @@ class criteria_map:
             normalizedValue = 0
 
         return normalizedValue
+    
+    def det_calc(self, array):
+        array = array*100
+        array = np.asarray(array, dtype=np.int16)
+        det_ = np.linalg.det(array)
+        return det_
+
+            
