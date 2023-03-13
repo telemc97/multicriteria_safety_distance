@@ -55,14 +55,14 @@ class criteria_map:
         # rospy.loginfo('Point coordinates: %f, %f' %(self.world_coords[0], self.world_coords[1]))
         
         x,y = self.point_to_index(self.world_coords)
-        newPoint = self.new_point((x,y), self.world_coords)
+        newPoint = self.new_point(x,y, self.world_coords)
 
         if (newPoint):
             ##add to points
             if (self.map[x,y]['det_sum']==0):
-                self.map[x,y]['points'] = self.get_cantor_hash(self.world_coords)
+                self.map[x,y]['points'] = np.asarray(self.get_cantor_hash(self.world_coords), dtype=np.int64)
             else:    
-                self.map[x,y]['points'] = np.hstack((self.map[x,y]['points'], self.get_cantor_hash(self.world_coords)))
+                self.map[x,y]['points'] = np.hstack((self.map[x,y]['points'], np.asarray(self.get_cantor_hash(self.world_coords), dtype=np.int64)))
 
             ##add to detection sum
             self.map[x,y]['det_sum'] +=1
@@ -80,20 +80,17 @@ class criteria_map:
     def get_average_slope(self, x,y):
         if (self.map[x,y]['det_sum']>3):
             rospy.loginfo(self.map[x,y]['det_sum'])
-            sum_set = int(self.map[x,y]['points'].shape[0]/3)
-            det_array = np.zeros(shape=(3,3), dtype=np.float16)
-            det_sum = 0
+            sum_set = int((self.map[x,y]['points'].shape[0]//3) * 3)
+            det_array = np.zeros(shape=(sum_set,3), dtype=np.float16)
             for i in range(sum_set):
-                for j in range(3):
-                    pointxyz = self.get_points_from_cantor(self.map[x,y]['points'][i*3+j])
-                    det_array[j,:] = pointxyz
-                det = self.det_calc(det_array)
-                det_sum +=det
-            avg_det = det_sum/sum_set
-            return avg_det
+                pointxyz = self.get_points_from_cantor(self.map[x,y]['points'][i])
+                det_array[i,:] = pointxyz
+            det = self.det_calc(det_array)
+
+            return det
         else:
-            avg_det = 0
-            return avg_det
+            det = 0
+            return det
 
 
     def point_to_index(self, point):
@@ -129,10 +126,10 @@ class criteria_map:
         return x, y
         
 
-    def new_point(self, index, point):
+    def new_point(self, x, y, point):
         new_point = True
         cantorPoint = self.get_cantor_hash(point)
-        detectedPoints = self.map[index[0], index[1]]['points']
+        detectedPoints = self.map[x, y]['points']
         it = np.nditer(detectedPoints, op_flags=['readonly'])
         for x in it:
             if (int(x/self.comparRes)==cantorPoint): new_point = False
@@ -219,8 +216,6 @@ class criteria_map:
     
     def det_calc(self, array):
         array = array*100
-        array = np.asarray(array, dtype=np.int16)
+        array = np.asarray(array, dtype=np.int32)
         det_ = np.linalg.det(array)
         return det_
-
-            
