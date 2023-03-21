@@ -140,43 +140,43 @@ class criteria_map:
         return new_point
 
     
-    #TODO decrease resolution
     def get_cantor_hash(self, point) -> np.uint64:
         newPoints = np.zeros(shape=(3), dtype=np.int64)
         for i in range(3):
-            if (point[i]<0):
+            if (0>point[i]):
                 negative=1
                 point[i] = abs(point[i])
             else:
                 negative=0
             meters = np.uint64(point[i] - point[i]%1)
-            centimeters = np.uint64(point[i]%1*100)
-            newPoints[i] = np.uint64((negative*100000) + (meters*100) + centimeters)
-        a = np.uint64((math.pow(newPoints[0],2) + newPoints[0] + 2*newPoints[0]*newPoints[1] + 3*newPoints[1] + math.pow(newPoints[1],2))/2)
-        cHash = np.uint64((math.pow(a,2) + a + 2*a*newPoints[2] + 3*newPoints[2] + math.pow(newPoints[2],2))/2)
+            centimeters = np.uint64(point[i]%1*10)
+            newPoints[i] = np.uint64((negative*10000) + (meters*10) + centimeters)
+        print(newPoints)
+        a = np.uint64(((newPoints[0] * newPoints[0]) + newPoints[0] + 2*newPoints[0]*newPoints[1] + 3*newPoints[1] + (newPoints[1] * newPoints[1]))/2)
+        cHash = np.uint64(((a * a) + a + 2*a*newPoints[2] + 3*newPoints[2] + (newPoints[2] * newPoints[2]))/2)
         return cHash
 
 
     def get_points_from_cantor(self, cantor: np.uint64):
         w = np.uint64(math.floor((math.sqrt(8*cantor+1)-1)/2))
-        t = np.uint64((math.pow(w,2)+w)/2)
+        t = np.uint64(((w * w)+w)/2)
         z = np.uint64(cantor - t)
         xy = np.uint64(w - z)
         xyw = np.uint64(math.floor((math.sqrt(8*xy+1)-1)/2))
-        xyt = np.uint64((math.pow(xyw,2)+xyw)/2)
+        xyt = np.uint64(((xyw * xyw)+xyw)/2)
         y = np.uint64(xy - xyt)
         x = np.uint64(xyw - y)
         newPoints = np.array([x,y,z], dtype=np.int64)
         point = np.zeros(shape=(3), dtype=np.float32)
         for i in range(3):
-            if ((newPoints[i]//100000) == 0):
-                meters = np.uint64((newPoints[i]/100)//1)
-                centimeteres = np.uint64(newPoints[i]%100)
-                point[i] = meters + centimeteres/100
+            if ((newPoints[i]//10000) == 0):
+                meters = np.uint64((newPoints[i]/10)//1)
+                centimeteres = np.uint64(newPoints[i]%10)
+                point[i] = meters + centimeteres/10
             else:
-                meters = np.uint64(((newPoints[i]-100000)/100)//1)
-                centimeteres = np.uint64(newPoints[i]%100)
-                point[i] = (meters + centimeteres/100)*-1
+                meters = np.uint64(((newPoints[i]-10000)/10)//1)
+                centimeteres = np.uint64(newPoints[i]%10)
+                point[i] = (meters + centimeteres/10)*-1
         return point
     
 
