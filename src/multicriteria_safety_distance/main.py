@@ -46,9 +46,3 @@ class multicriteria_safety_distance:
 
     def get_safety_radius(self, decision_):
         return self.minSafetyRad + int(decision_*(self.maxSafetyRad-self.minSafetyRad))
-        
-
-if __name__ == "__main__":    
-    rospy.init_node("multicriteria_safety_distance", anonymous=True)
-    multicriteria_safety_distance()
-    rospy.spin()
