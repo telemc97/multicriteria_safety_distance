@@ -82,7 +82,7 @@ class criteria_map:
             rospy.loginfo(self.map[x,y]['det_sum'])
             sum_set = int((self.map[x,y]['points'].shape[0]//3))
             det_sum = 0
-            det_array = np.zeros(shape=(sum_set,3), dtype=np.float16)
+            det_array = np.zeros(shape=(3,3), dtype=np.float16)
             for i in range(sum_set):
                 for j in range(3):
                     pointxyz = self.get_points_from_cantor(self.map[x,y]['points'][i*3+j])
@@ -130,13 +130,15 @@ class criteria_map:
         
 
     def new_point(self, x, y, point):
-        new_point = True
-        cantorPoint = self.get_cantor_hash(point)
-        detectedPoints = self.map[x, y]['points']
-        it = np.nditer(detectedPoints, op_flags=['readonly'])
-        for x in it:
-            if (self.get_cantor_hash(x)==cantorPoint): new_point = False
-            rospy.loginfo('Point: %f, %f, %f already detected' % (point[0], point[1], point[2]))
+        if (self.map[x, y]['det_sum']==0):
+            new_point = True
+        else:
+            cantorPoint = self.get_cantor_hash(point)
+            it = np.nditer(self.map[x, y]['points'], op_flags=['readonly'])
+            new_point = True
+            for k in it:
+                if (k == cantorPoint): new_point = False
+                rospy.loginfo('Point: %f, %f, %f already detected' % (point[0], point[1], point[2]))
         return new_point
 
     
@@ -151,7 +153,6 @@ class criteria_map:
             meters = np.uint64(point[i] - point[i]%1)
             centimeters = np.uint64(point[i]%1*10)
             newPoints[i] = np.uint64((negative*10000) + (meters*10) + centimeters)
-        print(newPoints)
         a = np.uint64(((newPoints[0] * newPoints[0]) + newPoints[0] + 2*newPoints[0]*newPoints[1] + 3*newPoints[1] + (newPoints[1] * newPoints[1]))/2)
         cHash = np.uint64(((a * a) + a + 2*a*newPoints[2] + 3*newPoints[2] + (newPoints[2] * newPoints[2]))/2)
         return cHash

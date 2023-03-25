@@ -3,8 +3,8 @@
 import rospy
 import numpy as np
 import message_filters
-from criteria_map import criteria_map
-from occupancyGrid_to_numpy import numpy_occupancyGrid
+from multicriteria_safety_distance.criteria_map import criteria_map
+from multicriteria_safety_distance.occupancyGrid_to_numpy import numpy_occupancyGrid
 
 from multicriteria_safety_distance.msg import PointConfidenceStamped
 from nav_msgs.msg import OccupancyGrid
@@ -18,7 +18,7 @@ class multicriteria_safety_distance:
         self.occupancyGrid = message_filters.Subscriber('projected_map', OccupancyGrid)
 
         self.minSafetyRad = rospy.get_param('~min_safety_radius', 0)
-        self.maxSafetyRad = rospy.get_param('~max_safety_radius', 4)
+        self.maxSafetyRad = rospy.get_param('~max_safety_radius', 3)
 
         self.criterialMap = criteria_map()
         self.numpyOccupancyGrid = numpy_occupancyGrid()
@@ -40,7 +40,7 @@ class multicriteria_safety_distance:
                 decision = self.criterialMap.get_multicriterial_coef(rw_point)
                 index_w_offset = it.multi_index[0]+self.maxSafetyRad, it.multi_index[1]+self.maxSafetyRad
                 safetyRadius = self.get_safety_radius(decision)
-                tempNumpyOccupancyGrid[index_w_offset[0]-safetyRadius:it.multi_index[0]+safetyRadius+1, index_w_offset[1]-safetyRadius:it.multi_index[1]+safetyRadius+1] = 100
+                tempNumpyOccupancyGrid[index_w_offset[0]-safetyRadius:index_w_offset[0]+safetyRadius+1, index_w_offset[1]-safetyRadius:index_w_offset[1]+safetyRadius+1] = 100
         self.numpyOccupancyGrid.occupancyGrid = tempNumpyOccupancyGrid[self.maxSafetyRad:self.maxSafetyRad+self.numpyOccupancyGrid.occupancyGrid.shape[0], self.maxSafetyRad:self.maxSafetyRad+self.numpyOccupancyGrid.occupancyGrid.shape[1]]
         self.numpyOccupancyGrid.to_occupancy_grid()
 
