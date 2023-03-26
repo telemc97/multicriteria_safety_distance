@@ -14,7 +14,7 @@ class multicriteria_safety_distance:
     def __init__(self):
 
 
-        self.pointWithConfidence = message_filters.Subscriber('/yolov5/Point_with_confidence', PointConfidenceStamped)
+        self.pointWithConfidence = message_filters.Subscriber('/yolov5/point_with_confidence', PointConfidenceStamped)
         self.occupancyGrid = message_filters.Subscriber('projected_map', OccupancyGrid)
 
         self.minSafetyRad = rospy.get_param('~min_safety_radius', 0)

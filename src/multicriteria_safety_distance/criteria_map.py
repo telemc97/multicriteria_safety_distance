@@ -17,8 +17,6 @@ class criteria_map:
         self.maxDecisionCoef = 0
         self.minDecisionCoef = 100000
 
-        self.comparRes = rospy.get_param('~comparison_resolution', 100)
-
         self.multisampleRes = rospy.get_param('~multisample_resolution', 2) #Multiplies resolution to get more data for slope, avg conf, etc
 
         criteriadt = np.dtype([('det_sum', np.int16), ('avg_conf', np.float16), ('points', object), ('density', np.float16)])
