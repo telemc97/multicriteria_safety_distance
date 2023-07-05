@@ -3,8 +3,8 @@
 import rospy
 import numpy as np
 import message_filters
-from multicriteria_safety_distance.criteria_map import criteria_map
-from multicriteria_safety_distance.occupancyGrid_to_numpy import numpy_occupancyGrid
+from multicriteria_safety_distance.criteria_map import CriteriaMap
+from multicriteria_safety_distance.occupancyGrid_to_numpy import npOccupancyGrid
 
 from multicriteria_safety_distance.msg import PointConfidenceStamped
 from nav_msgs.msg import OccupancyGrid
@@ -20,8 +20,8 @@ class multicriteria_safety_distance:
         self.minSafetyRad = rospy.get_param('~min_safety_radius', 0)
         self.maxSafetyRad = rospy.get_param('~max_safety_radius', 3)
 
-        self.criterialMap = criteria_map()
-        self.numpyOccupancyGrid = numpy_occupancyGrid()
+        self.criterialMap = CriteriaMap()
+        self.numpyOccupancyGrid = npOccupancyGrid()
 
         self.synch = message_filters.ApproximateTimeSynchronizer([self.pointWithConfidence, self.occupancyGrid], queue_size=10, slop=0.5)
         self.synch.registerCallback(self.main_callback)

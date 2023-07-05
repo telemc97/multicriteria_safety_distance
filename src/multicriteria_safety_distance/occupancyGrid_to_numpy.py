@@ -4,7 +4,7 @@ from std_msgs.msg import Header
 import rospy
 import time
 
-class numpy_occupancyGrid:
+class npOccupancyGrid:
     def __init__(self):
 
         self.occupancyGrid = np.zeros(shape=(0,0), dtype=np.int8)
